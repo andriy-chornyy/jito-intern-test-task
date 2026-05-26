@@ -11,8 +11,8 @@ function convertHtml2JsonAndSet() {
   jsonEl.textContent = JSON.stringify(result, null, 2);
 }
 
-function html2json(html) { 
-  if (typeof html !== "string") return createRoot(); 
+function html2json(html) {
+  if (typeof html !== "string") return createRoot();
 
   const root = createRoot();
   const stack = [root];
@@ -66,10 +66,7 @@ function html2json(html) {
         continue;
       }
 
-      if (
-        html.startsWith("<!DOCTYPE", i) ||
-        html.startsWith("<!doctype", i)
-      ) {
+      if (html.startsWith("<!DOCTYPE", i) || html.startsWith("<!doctype", i)) {
         const end = html.indexOf(">", i);
         const stop = end === -1 ? html.length : end + 1;
 
@@ -124,7 +121,6 @@ function html2json(html) {
         if (!isSelfClosing(tag, raw)) {
           stack.push(node);
         }
-
       } else {
         closeTag(tag, stack);
       }
@@ -133,9 +129,9 @@ function html2json(html) {
       continue;
     }
 
-  buffer += c;
-  i++;
-}
+    buffer += c;
+    i++;
+  }
 
   if (buffer) addText(buffer, stack);
 
@@ -149,7 +145,6 @@ function html2json(html) {
         delete node.children;
       }
     }
-
 
     if (node.tag === "script" || node.tag === "style") {
       delete node.children;
@@ -214,10 +209,7 @@ function addComment(token, stack) {
   const parent = stack[stack.length - 1];
   if (!parent) return;
 
-  const content = token
-    .replace("<!--", "")
-    .replace("-->", "")
-    .trim();
+  const content = token.replace("<!--", "").replace("-->", "").trim();
 
   parent.children.push({
     nodeType: "comment",
@@ -252,10 +244,7 @@ function splitTag(raw) {
 
   const spaceIndex = raw.indexOf(" ");
 
-  const end =
-    spaceIndex === -1
-      ? raw.length - 1
-      : spaceIndex;
+  const end = spaceIndex === -1 ? raw.length - 1 : spaceIndex;
 
   const tag = raw.slice(start, end);
 
@@ -291,18 +280,26 @@ function decode(str) {
     .replace(/&apos;/g, "'")
     .replace(/&amp;/g, "&")
     .replace(/&#x([0-9a-fA-F]+);/g, (_, n) =>
-      String.fromCharCode(parseInt(n, 16))
+      String.fromCharCode(parseInt(n, 16)),
     )
-    .replace(/&#(\d+);/g, (_, n) =>
-      String.fromCharCode(Number(n))
-    );
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
 }
 
-
 const SELF_CLOSING = new Set([
-  "area","base","br","col","embed","hr",
-  "img","input","link","meta","param",
-  "source","track","wbr",
+  "area",
+  "base",
+  "br",
+  "col",
+  "embed",
+  "hr",
+  "img",
+  "input",
+  "link",
+  "meta",
+  "param",
+  "source",
+  "track",
+  "wbr",
 ]);
 
 const AUTO_CLOSE_P = new Set([
@@ -335,8 +332,7 @@ async function loadHtmlSample(path) {
   } catch (error) {
     console.error(error);
 
-    document.getElementById("json").textContent =
-      `Error: ${error.message}`;
+    document.getElementById("json").textContent = `Error: ${error.message}`;
   }
 }
 
@@ -377,75 +373,8 @@ function stress_test_test() {
 }
 
 function showExample1() {
-  const htmlExample = `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport">
-    <title>Sample HTML</title>
-    <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-    <header>
-        <h1>Welcome to My Website</h1>
-    </header>
-    <nav>
-        <ul>
-            <li><a href="#home">Home</a></li>
-            <li><a href="#about">About</a></li>
-            <li><a href="#contact">Contact</a></li>
-        </ul>
-    </nav>
-    <main>
-        <section id="home">
-            <h2>Home Section</h2>
-            <p>This is the home section of the webpage.</p>
-        </section>
-        <section id="about">
-            <h2>About Section</h2>
-            <p>This is the about section of the webpage.</p>
-        </section>
-    </main>
-    <footer>
-        <p>&copy; 2024 My Website</p>
-    </footer>
-    <script src="script.js"></script>
-</body>
-</html>
-`;
-  const jsonContent = {
-    "Comment 1":
-      "You have to think about how to take into account various html inputs so your json structure will cover them all and handle different cases.",
-    "Comment 2":
-      "When you make any choice in terms of selecting specific json structure for conversion - be ready to provide reasoning behind such choice.",
-  };
-
-  document.getElementById("html").value = htmlExample;
-  document.getElementById("json").textContent = JSON.stringify(
-    jsonContent,
-    null,
-    2
-  );
+  loadHtmlSample("./html_samples/showExample1.html");
 }
-
 function showExample2() {
-  const htmlExample = `<div>
-<p>Hello world!</p>
-  <button>Click me!</button>
-  <textarea>Some very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very very long string.</textarea>
-</div>
-`;
-  const jsonContent = {
-    "Comment 1":
-      "You have to think about how to take into account various html inputs so your json structure will cover them all and handle different cases.",
-    "Comment 2":
-      "When you make any choice in terms of selecting specific json structure for conversion - be ready to provide reasoning behind such choice.",
-  };
-
-  document.getElementById("html").value = htmlExample;
-  document.getElementById("json").textContent = JSON.stringify(
-    jsonContent,
-    null,
-    2
-  );
+  loadHtmlSample("./html_samples/showExample2.html");
 }
