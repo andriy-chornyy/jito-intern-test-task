@@ -165,12 +165,13 @@ function createElement(tag, attrs) {
   const node = {
     tag: tag || "",
     nodeType: "element",
-    children: [],
   };
 
   if (attrs && Object.keys(attrs).length > 0) {
     node.attrs = attrs;
   }
+
+  node.children = [];
 
   return node;
 }
