@@ -28,15 +28,30 @@
 
       textarea {
         width: 100%;
-        height: calc(100vh - 170px);
+        height: calc(100vh - 270px);
         max-width: 100%;
         white-space: pre;
       }
 
       .buttons {
         display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
         gap: 10px;
         margin-top: 10px;
+      }
+
+      .row1 {
+        background-color: pink;
+      }
+
+      .row2 {
+        background-color: yellow;
+      }
+
+      .row3 {
+        background-color: yellowgreen;
       }
 
       button {
@@ -60,10 +75,27 @@
       </div>
     </div>
     <div class="buttons">
-      <button onclick="convertHtml2JsonAndSet()">Convert to JSON</button>
-      <button onclick="showExample0()">Input Example 0</button>
-      <button onclick="showExample1()">Input Example 1</button>
-      <button onclick="showExample2()">Input Example 2</button>
+      <div>
+        <button class="row1" onclick="convertHtml2JsonAndSet()">Convert to JSON</button>
+      </div>
+
+      <div>
+        <button class="row2"onclick="showExample1()">Input Example 1</button>
+        <button class="row2" onclick="showExample2()">Input Example 2</button>
+      </div>
+    
+      <div>
+        <button class="row3" onclick="simple_test()">Simple test</button>
+        <button class="row3" onclick="nested_test()">Nested test</button>
+        <button class="row3" onclick="broken_test()">Broken test</button>
+
+        <button class="row3" onclick="script_style_test()">Script style test</button>
+        <button class="row3" onclick="table_case_test()">Table case test</button>
+        <button class="row3" onclick="self_closing_test()">Self closing test</button>
+        <button class="row3" onclick="comment_doctype_test()">Comment doctype test</button>
+        <button class="row3" onclick="long_text_test()">Long text test</button>
+        <button class="row3" onclick="stress_test_test()">Stress test</button>
+      </div>
     </div>
   </body>
 </html>

@@ -1,309 +1,379 @@
 function convertHtml2JsonAndSet() {
-  const htmlTextAreaValue = document.getElementById("html").value;
-  const jsonObj = html2json(htmlTextAreaValue);
-  const jsonArea = document.getElementById("json");
-  jsonArea.textContent = JSON.stringify(jsonObj, null, 2);
+  const htmlEl = document.getElementById("html");
+  const jsonEl = document.getElementById("json");
+
+  if (!htmlEl || !jsonEl) return;
+
+  const htmlText = typeof htmlEl.value === "string" ? htmlEl.value : "";
+
+  const result = html2json(htmlText);
+
+  jsonEl.textContent = JSON.stringify(result, null, 2);
 }
 
-/* 
-  Update this function to convert html into json object.
-  You can rewrite it completely, just be sure it accepts htmlText as string and outputs json object.
-*/
+function html2json(html) { 
+  if (typeof html !== "string") return createRoot(); 
 
-function findAndCloseTag(stack, tagName) {
-  let foundIndex = -1;
+  const root = createRoot();
+  const stack = [root];
+
+  let i = 0;
+  let buffer = "";
+
+  let rawTag = null;
+  let rawBuffer = "";
+  let rawNode = null;
+
+  while (i < html.length) {
+    const c = html[i];
+
+    if (rawTag) {
+      const closeSeq = rawTag === "script" ? "</script>" : "</style>";
+      const chunk = html.slice(i, i + closeSeq.length);
+
+      if (chunk.toLowerCase() === closeSeq.toLowerCase()) {
+        const parent = stack[stack.length - 1];
+
+        if (rawNode) {
+          rawNode.content = rawBuffer;
+        }
+
+        rawBuffer = "";
+        rawTag = null;
+        rawNode = null;
+
+        i += closeSeq.length;
+        continue;
+      }
+
+      rawBuffer += c;
+      i++;
+      continue;
+    }
+
+    if (c === "<") {
+      if (buffer) {
+        addText(buffer, stack);
+        buffer = "";
+      }
+
+      if (html.startsWith("<!--", i)) {
+        const end = html.indexOf("-->", i + 4);
+        const stop = end === -1 ? html.length : end + 3;
+
+        addComment(html.slice(i, stop), stack);
+        i = stop;
+        continue;
+      }
+
+      if (
+        html.startsWith("<!DOCTYPE", i) ||
+        html.startsWith("<!doctype", i)
+      ) {
+        const end = html.indexOf(">", i);
+        const stop = end === -1 ? html.length : end + 1;
+
+        const rootNode = stack[0];
+        if (rootNode) {
+          rootNode.doctype = cleanDoctype(html.slice(i, stop));
+        }
+
+        i = stop;
+        continue;
+      }
+
+      const end = html.indexOf(">", i);
+      if (end === -1) break;
+
+      const raw = html.slice(i, end + 1);
+      const isClosing = raw[1] === "/";
+      const { tag, attrs } = splitTag(raw);
+
+      if (!isClosing) {
+        if (tag === "script" || tag === "style") {
+          const node = createElement(tag, parseAttributes(attrs));
+          const parent = stack[stack.length - 1];
+
+          if (parent) {
+            if (!Array.isArray(parent.children)) {
+              parent.children = [];
+            }
+
+            parent.children.push(node);
+          }
+
+          rawTag = tag;
+          rawBuffer = "";
+          rawNode = node;
+
+          i = end + 1;
+          continue;
+        }
+
+        const current = stack[stack.length - 1];
+
+        if (current && current.tag === "p" && AUTO_CLOSE_P.has(tag)) {
+          stack.pop();
+        }
+
+        const node = createElement(tag, parseAttributes(attrs));
+        const parent = stack[stack.length - 1];
+
+        if (parent) parent.children.push(node);
+
+        if (!isSelfClosing(tag, raw)) {
+          stack.push(node);
+        }
+
+      } else {
+        closeTag(tag, stack);
+      }
+
+      i = end + 1;
+      continue;
+    }
+
+  buffer += c;
+  i++;
+}
+
+  if (buffer) addText(buffer, stack);
+
+  function cleanEmpty(node) {
+    if (!node || typeof node !== "object") return;
+
+    if (Array.isArray(node.children)) {
+      node.children.forEach(cleanEmpty);
+
+      if (node.children.length === 0) {
+        delete node.children;
+      }
+    }
+
+
+    if (node.tag === "script" || node.tag === "style") {
+      delete node.children;
+    }
+  }
+
+  cleanEmpty(root);
+
+  return root;
+}
+
+const DATA_MODE = 0;
+const TAG_MODE = 1;
+
+function createRoot() {
+  return { nodeType: "root", doctype: null, children: [] };
+}
+
+function createElement(tag, attrs) {
+  const node = {
+    tag: tag || "",
+    nodeType: "element",
+    children: [],
+  };
+
+  if (attrs && Object.keys(attrs).length > 0) {
+    node.attrs = attrs;
+  }
+
+  return node;
+}
+
+function closeTag(tag, stack) {
+  if (!tag) return;
 
   for (let i = stack.length - 1; i > 0; i--) {
-    if (stack[i].tagName === tagName) {
-      foundIndex = i;
+    if (stack[i].tag === tag) {
+      stack.length = i;
       break;
     }
   }
 
-  if (foundIndex === -1) return;
-
-  while (stack.length > foundIndex) {
-    stack.pop();
+  if (stack.length === 0) {
+    stack.push(createRoot());
   }
 }
 
-function normalizeText(text) {
-  return text
-    .replace(/\s+/g, " ")
-    .trim();
-}
+function addText(text, stack) {
+  const value = decode(text);
+  if (!value || !value.trim()) return;
 
-function pushTextNode(parent, text) {
-  const normalized = normalizeText(text);
-
-  if (normalized.length === 0) {
-    return;
-  }
+  const parent = stack[stack.length - 1];
+  if (!parent) return;
 
   parent.children.push({
     nodeType: "text",
-    content: normalized
+    content: value,
   });
 }
 
-const VOID_ELEMENTS = new Set([
-  "img",
-  "br",
-  "hr",
-  "meta",
-  "input",
-  "link"
-]);
-
-function html2json(htmlText) {
-  let isInsideComment = false;
-
-  function parseTag(tag) {
-    const result = {
-      tagName: "",
-      attributes: {}
-    };
-
-    let i = 0;
-    let mode = "tag";
-    let key = "";
-    let buffer = "";
-    let quote = null;
-
-    while (i < tag.length) {
-      const char = tag[i];
-
-      if (char === '"' || char === "'") {
-        if (!quote) {
-          quote = char;
-        } else if (quote === char) {
-          quote = null;
-        } else {
-          buffer += char;
-        }
-
-        i++;
-        continue;
-      }
-
-      if (mode === "tag") {
-        if (char === " ") {
-          result.tagName = buffer;
-          buffer = "";
-          mode = "attr";
-        } else {
-          buffer += char;
-        }
-
-        i++;
-        continue;
-      }
-
-      if (mode === "attr") {
-
-        if (char === " " && !quote) {
-          if (buffer.length > 0 && !key) {
-            result.attributes[buffer] = true;
-          }
-          buffer = "";
-          i++;
-          continue;
-        }
-
-        if (char === "=" && !quote) {
-          key = buffer;
-          buffer = "";
-          i++;
-          continue;
-        }
-
-        buffer += char;
-        i++;
-        continue;
-      }
-    }
-
-    if (buffer.length > 0) {
-      if (!result.tagName) {
-        result.tagName = buffer;
-      } else if (!key) {
-        result.attributes[buffer] = true;
-      } else {
-        result.attributes[key] = buffer;
-      }
-    }
-
-    return result;
-  }
-
-  const result = {
-    nodeType: "document",
-    doctype: null,
-    children: [],
-    root: null
-  };
-
-  const stack = [result];
-
-  let currentText = "";
-  let currentTag = "";
-  let isInsideTag = false;
-
-  for (let i = 0; i < htmlText.length; i++) {
-    const symbol = htmlText[i];
-
-    if (!isInsideComment && htmlText.startsWith("<!--", i)) {
-      isInsideComment = true;
-      i += 3;
-      currentTag = "";
-      currentText = "";
-
-      continue;
-    }
-
-    if (isInsideComment && htmlText.startsWith("-->", i)) {
-      isInsideComment = false;
-      i += 2;
-      currentTag = "";
-      currentText = "";
-
-      continue;
-    }
-
-    if (isInsideComment) {
-      continue;
-    }
-
-    if (symbol === "<") {
-
-      const parent = stack[stack.length - 1];
-
-      if (parent) {
-        pushTextNode(parent, currentText);
-      }
-
-      currentText = "";
-      currentTag = "";
-      isInsideTag = true;
-
-      continue;
-    }
-
-    if (symbol === ">") {
-      const tag = currentTag.trim();
-
-      if (tag.startsWith("!DOCTYPE")) {
-        result.doctype = tag
-          .replace("!DOCTYPE", "")
-          .trim()
-          .toLowerCase();
-
-        currentTag = "";
-        isInsideTag = false;
-
-        continue;
-      }
-
-      if (tag.length > 0) {
-        if (tag[0] === "/") {
-          const tagName = tag.slice(1).trim();
-
-          findAndCloseTag(stack, tagName);
-        } else {
-          const parsed = parseTag(tag);
-          const tagName = parsed.tagName;
-
-          const parent = stack[stack.length - 1];
-
-          const element = {
-            tagName,
-            nodeType: "element",
-            attributes: parsed.attributes,
-            children: []
-          };
-
-          parent.children.push(element);
-
-          const isVoid = VOID_ELEMENTS.has(tagName);
-
-          if (!isVoid) {
-            stack.push(element);
-          }
-        }
-      }
-
-      currentTag = "";
-      isInsideTag = false;
-
-      continue;
-    }
-
-    if (isInsideTag) {
-      currentTag += symbol;
-    } else {
-      currentText += symbol;
-    }
-  }
-
+function addComment(token, stack) {
   const parent = stack[stack.length - 1];
+  if (!parent) return;
 
-  if (parent) {
-    pushTextNode(parent, currentText);
-  }
+  const content = token
+    .replace("<!--", "")
+    .replace("-->", "")
+    .trim();
 
-  return result;
+  parent.children.push({
+    nodeType: "comment",
+    content,
+  });
 }
 
-function showExample0() {
-  const htmlExample = `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" class="a b c">
-    <title>Sample HTML</title>
-    <link rel="stylesheet" href="styles.css" class="a b c">
-</head>
-<body>
-    <header>
-        <h1>Welcome to My Website</h1>
-    </header>
-    <nav>
-        <ul>
-            <li><a href="#home">Home</a></li>
-            <li><a href="#about">About</a></li>
-            <li><a href="#contact">Contact</a></li>
-        </ul>
-    </nav>
-    <main>
-        <section id="home">
-            <h2>Home Section</h2>
-            <p>This is the home section of the webpage.</p>
-        </section>
-        <section id="about">
-            <h2>About Section</h2>
-            <p>This is the about section of the webpage.</p>
-        </section>
-    </main>
-    <footer>
-        <p>&copy; 2024 My Website</p>
-    </footer>
-    <script src="script.js"></script>
-</body>
-</html>
-`;
-  const jsonContent = {
-    "Comment 1":
-      "You have to think about how to take into account various html inputs so your json structure will cover them all and handle different cases.",
-    "Comment 2":
-      "When you make any choice in terms of selecting specific json structure for conversion - be ready to provide reasoning behind such choice.",
-  };
+function parseAttributes(attrsStr) {
+  const attrs = {};
 
-  document.getElementById("html").value = htmlExample;
-  document.getElementById("json").textContent = JSON.stringify(
-    jsonContent,
-    null,
-    2
-  );
+  if (!attrsStr) {
+    return attrs;
+  }
+
+  const regex = /([^\s=]+)(?:="([^"]*)"|'([^']*)'|=([^\s>]+))?/g;
+
+  let m;
+  while ((m = regex.exec(attrsStr))) {
+    const key = m[1];
+    let val = m[2] ?? m[3] ?? m[4] ?? true;
+
+    attrs[key] = val;
+  }
+
+  return attrs;
+}
+
+function splitTag(raw) {
+  const isClosing = raw[1] === "/";
+
+  const start = isClosing ? 2 : 1;
+
+  const spaceIndex = raw.indexOf(" ");
+
+  const end =
+    spaceIndex === -1
+      ? raw.length - 1
+      : spaceIndex;
+
+  const tag = raw.slice(start, end);
+
+  const attrs =
+    !isClosing && spaceIndex !== -1
+      ? raw.slice(spaceIndex + 1, raw.length - 1).trim()
+      : "";
+
+  return {
+    tag: tag.toLowerCase(),
+    attrs,
+  };
+}
+
+function isSelfClosing(tag, raw) {
+  return raw.endsWith("/>") || SELF_CLOSING.has(tag);
+}
+
+function cleanDoctype(str) {
+  return str
+    .replace(/<!doctype/i, "")
+    .replace(/>/g, "")
+    .trim();
+}
+
+function decode(str) {
+  if (typeof str !== "string") return str;
+
+  return str
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, n) =>
+      String.fromCharCode(parseInt(n, 16))
+    )
+    .replace(/&#(\d+);/g, (_, n) =>
+      String.fromCharCode(Number(n))
+    );
+}
+
+
+const SELF_CLOSING = new Set([
+  "area","base","br","col","embed","hr",
+  "img","input","link","meta","param",
+  "source","track","wbr",
+]);
+
+const AUTO_CLOSE_P = new Set([
+  "div",
+  "section",
+  "article",
+  "main",
+  "aside",
+  "header",
+  "footer",
+  "nav",
+  "table",
+  "ul",
+  "ol",
+  "li",
+]);
+
+async function loadHtmlSample(path) {
+  try {
+    const response = await fetch(path);
+
+    if (!response.ok) {
+      throw new Error(`Failed to load: ${path}`);
+    }
+
+    const html = await response.text();
+
+    document.getElementById("html").value = html;
+    document.getElementById("json").textContent = "";
+  } catch (error) {
+    console.error(error);
+
+    document.getElementById("json").textContent =
+      `Error: ${error.message}`;
+  }
+}
+
+function simple_test() {
+  loadHtmlSample("./html_samples/01_simple.html");
+}
+
+function nested_test() {
+  loadHtmlSample("./html_samples/02_nested.html");
+}
+
+function broken_test() {
+  loadHtmlSample("./html_samples/03_broken_html.html");
+}
+
+function script_style_test() {
+  loadHtmlSample("./html_samples/04_script_style.html");
+}
+
+function table_case_test() {
+  loadHtmlSample("./html_samples/05_table_case.html");
+}
+
+function self_closing_test() {
+  loadHtmlSample("./html_samples/06_self_closing.html");
+}
+
+function comment_doctype_test() {
+  loadHtmlSample("./html_samples/07_comment_doctype.html");
+}
+
+function long_text_test() {
+  loadHtmlSample("./html_samples/08_long_text.html");
+}
+
+function stress_test_test() {
+  loadHtmlSample("./html_samples/09_stress_test.html");
 }
 
 function showExample1() {
@@ -379,4 +449,3 @@ function showExample2() {
     2
   );
 }
-
