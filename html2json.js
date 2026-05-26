@@ -1,3 +1,4 @@
+
 function convertHtml2JsonAndSet() {
   const htmlEl = document.getElementById("html");
   const jsonEl = document.getElementById("json");
@@ -156,9 +157,6 @@ function html2json(html) {
   return root;
 }
 
-const DATA_MODE = 0;
-const TAG_MODE = 1;
-
 function createRoot() {
   return { nodeType: "root", doctype: null, children: [] };
 }
@@ -220,9 +218,7 @@ function addComment(token, stack) {
 function parseAttributes(attrsStr) {
   const attrs = {};
 
-  if (!attrsStr) {
-    return attrs;
-  }
+  if (!attrsStr) return attrs;
 
   const regex = /([^\s=]+)(?:="([^"]*)"|'([^']*)'|=([^\s>]+))?/g;
 
@@ -375,6 +371,7 @@ function stress_test_test() {
 function showExample1() {
   loadHtmlSample("./html_samples/showExample1.html");
 }
+
 function showExample2() {
   loadHtmlSample("./html_samples/showExample2.html");
 }
